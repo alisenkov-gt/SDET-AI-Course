@@ -1,0 +1,19 @@
+{
+  "name": "untitled",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "playwright test",
+    "test:debug": "PWDEBUG=1 playwright test"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "typescript": "^5.5.3"
+  },
+  "private": true
+}
