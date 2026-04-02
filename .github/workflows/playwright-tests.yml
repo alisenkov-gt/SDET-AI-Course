@@ -23,6 +23,9 @@ jobs:
       contents: read
       pages: write
       id-token: write
+    defaults:
+      run:
+        working-directory: ai.test.maintenance+ci
     env:
       CI: "true"
 
@@ -37,7 +40,7 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: ai.test.maintenance+ci/package-lock.json
 
       # Install project dependencies from the committed lockfile.
       - name: Install dependencies
@@ -57,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-html-report
-          path: playwright-report
+          path: ai.test.maintenance+ci/playwright-report
           if-no-files-found: warn
 
       # Always upload Playwright traces from failed or retained runs.
@@ -67,8 +70,8 @@ jobs:
         with:
           name: playwright-traces
           path: |
-            test-results/**/trace*.zip
-            test-results/**/trace.zip
+            ai.test.maintenance+ci/test-results/**/trace*.zip
+            ai.test.maintenance+ci/test-results/**/trace.zip
           if-no-files-found: warn
 
       - name: Fetch existing Pages history
@@ -128,7 +131,7 @@ jobs:
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         uses: actions/upload-pages-artifact@v3
         with:
-          path: playwright-report
+          path: ai.test.maintenance+ci/playwright-report
 
       - name: Deploy Playwright report to GitHub Pages
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
@@ -139,6 +142,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: false
+    defaults:
+      run:
+        working-directory: ai.test.maintenance+ci
 
     steps:
       - name: Checkout
@@ -149,7 +155,7 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: ai.test.maintenance+ci/package-lock.json
 
       - name: Install dependencies
         run: npm ci
