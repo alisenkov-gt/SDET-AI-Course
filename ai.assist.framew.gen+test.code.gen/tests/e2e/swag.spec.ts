@@ -4,18 +4,8 @@ import { InventoryPage } from '../../src/pages/InventoryPage';
 import { CheckoutPage } from '../../src/pages/CheckoutPage';
 import { CartPage } from '../../src/pages/CartPage';
 import { SidebarPage } from '../../src/pages/SidebarPage';
-import { Page } from "@playwright/test";
-
-const users = {
-  standard: { username: 'standard_user', password: 'secret_sauce' },
-  locked: { username: 'locked_out_user', password: 'secret_sauce' },
-};
-
-const items = ['Sauce Labs Backpack', 'Sauce Labs Bike Light'];
-const prices: Record<string, number> = {
-  'Sauce Labs Backpack': 29.99,
-  'Sauce Labs Bike Light': 9.99,
-};
+import { Page } from '@playwright/test';
+import { items, prices, users } from '../../src/fixtures/sauceDemoData';
 
 const loginAs = async (page: Page, username: string, password: string) => {
   const loginPage = new LoginPage(page);
@@ -37,8 +27,8 @@ test.describe('SauceDemo flows', () => {
 
     // Verification
     await inventoryPage.assertSortValue('lohi');
-    await expect(inventoryPage.cartLink).toBeVisible();
-    await expect((await inventoryPage.getItemNames())[0]).toBe('Sauce Labs Onesie');
+    await inventoryPage.assertCartVisible();
+    await inventoryPage.assertFirstItemName('Sauce Labs Onesie');
   });
 
   test('locked out user sees locked message', async ({ page }) => {

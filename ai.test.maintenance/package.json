@@ -1,0 +1,19 @@
+{
+  "name": "ai.test.maintenance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Playwright project for AI-assisted test maintenance exercises.",
+  "scripts": {
+    "test": "playwright test --project=Chromium",
+    "test:headed": "playwright test --project=Chromium --headed",
+    "test:ui": "playwright test --project=Chromium --ui",
+    "report": "playwright show-report",
+    "codegen": "playwright codegen https://playwright.dev/",
+    "build": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

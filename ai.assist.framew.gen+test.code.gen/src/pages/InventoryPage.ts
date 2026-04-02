@@ -6,6 +6,7 @@ export class InventoryPage extends BasePage {
   readonly sortDropdown: Locator;
   readonly cartLink: Locator;
   readonly cartBadge: Locator;
+  readonly itemNames: Locator;
 
   constructor(page: Page) {
     super(page);
@@ -13,6 +14,7 @@ export class InventoryPage extends BasePage {
     this.sortDropdown = this.getByTestId('product-sort-container');
     this.cartLink = this.getByTestId('shopping-cart-link');
     this.cartBadge = this.cartLink.locator('.shopping_cart_badge');
+    this.itemNames = this.getByTestId('inventory-item-name');
   }
 
   async waitForLoaded(): Promise<void> {
@@ -27,6 +29,10 @@ export class InventoryPage extends BasePage {
     await expect(this.sortDropdown).toHaveValue(value);
   }
 
+  async assertCartVisible(): Promise<void> {
+    await expect(this.cartLink).toBeVisible();
+  }
+
   private addButtonFor(itemName: string): Locator {
     return this.getByTestId(`add-to-cart-${this.slugifyProduct(itemName)}`);
   }
@@ -39,8 +45,8 @@ export class InventoryPage extends BasePage {
     return this.inventoryItemByName(itemName);
   }
 
-  async getItemNames(): Promise<string[]> {
-    return this.page.getByTestId('inventory-item-name').allTextContents();
+  async assertFirstItemName(name: string): Promise<void> {
+    await expect(this.itemNames.first()).toHaveText(name);
   }
 
   async addItem(itemName: string): Promise<void> {
