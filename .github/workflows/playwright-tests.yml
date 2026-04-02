@@ -2,9 +2,9 @@ name: Playwright Tests
 
 on:
   pull_request:
-    branches: [master]
+    branches: [main, master]
   push:
-    branches: [master]
+    branches: [main, master]
 
 permissions:
   contents: read
@@ -18,24 +18,26 @@ jobs:
     name: playwright-tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: github-pages
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     env:
       CI: "true"
-    defaults:
-      run:
-        working-directory: ai.test.maintenance+ci
 
     steps:
-      # Check out repository contents.
+      # Check out the pull request contents.
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Set up the latest LTS Node.js runtime with Yarn caching.
+      # Set up the latest LTS Node.js runtime with npm dependency caching.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: ai.test.maintenance+ci/package-lock.json
+          cache-dependency-path: package-lock.json
 
       # Install project dependencies from the committed lockfile.
       - name: Install dependencies
@@ -55,7 +57,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-html-report
-          path: ai.test.maintenance+ci/playwright-report
+          path: playwright-report
           if-no-files-found: warn
 
       # Always upload Playwright traces from failed or retained runs.
@@ -65,6 +67,109 @@ jobs:
         with:
           name: playwright-traces
           path: |
-            ai.test.maintenance+ci/test-results/**/trace*.zip
-            ai.test.maintenance+ci/test-results/**/trace.zip
+            test-results/**/trace*.zip
+            test-results/**/trace.zip
           if-no-files-found: warn
+
+      - name: Fetch existing Pages history
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: |
+          git fetch origin gh-pages --depth=1 || exit 0
+          git --work-tree pages-history checkout FETCH_HEAD -- .
+
+      - name: Update Playwright history
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        env:
+          JOB_CONCLUSION: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          mkdir -p playwright-report
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const reportDir = path.join(process.cwd(), 'playwright-report');
+          const pagesHistoryFile = path.join(process.cwd(), 'pages-history', 'history.json');
+          const reportHistoryFile = path.join(reportDir, 'history.json');
+
+          let history = [];
+          if (fs.existsSync(pagesHistoryFile)) {
+            history = JSON.parse(fs.readFileSync(pagesHistoryFile, 'utf8'));
+          }
+
+          const summaryPath = path.join(process.cwd(), 'test-results', '.last-run.json');
+          let counts = null;
+          if (fs.existsSync(summaryPath)) {
+            try {
+              const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+              counts = {
+                status: summary.status ?? null,
+                failedTests: summary.failedTests ?? null,
+              };
+            } catch {
+              counts = null;
+            }
+          }
+
+          history.push({
+            timestamp: new Date().toISOString(),
+            runUrl: process.env.RUN_URL,
+            commitSha: process.env.GITHUB_SHA,
+            ref: process.env.GITHUB_REF,
+            branch: process.env.GITHUB_REF_NAME,
+            conclusion: process.env.JOB_CONCLUSION,
+            counts,
+          });
+
+          fs.writeFileSync(reportHistoryFile, JSON.stringify(history.slice(-50), null, 2));
+          EOF
+
+      - name: Upload Pages artifact
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report
+
+      - name: Deploy Playwright report to GitHub Pages
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: actions/deploy-pages@v4
+
+  security-scan:
+    name: security-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run dependency audit
+        shell: bash
+        run: |
+          npm audit --audit-level=high --json > audit.json || audit_exit=$?
+          node <<'EOF'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('audit.json', 'utf8'));
+          const metadata = report.metadata?.vulnerabilities ?? {};
+          const high = metadata.high ?? 0;
+          const critical = metadata.critical ?? 0;
+
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Dependency Security Scan\n`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `- High: ${high}\n`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `- Critical: ${critical}\n`);
+
+          if (high > 0 || critical > 0) {
+            process.exit(1);
+          }
+          EOF
