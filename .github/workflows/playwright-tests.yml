@@ -2,7 +2,9 @@ name: Playwright Tests
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [master]
+  push:
+    branches: [master]
 
 permissions:
   contents: read
@@ -18,33 +20,34 @@ jobs:
     timeout-minutes: 30
     env:
       CI: "true"
+    defaults:
+      run:
+        working-directory: ai.test.maintenance+ci
 
     steps:
-      # Check out the pull request contents.
+      # Check out repository contents.
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Set up the latest LTS Node.js runtime with Yarn dependency caching.
+      # Set up the latest LTS Node.js runtime with Yarn caching.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: yarn
-          cache-dependency-path: yarn.lock
+          cache: npm
+          cache-dependency-path: ai.test.maintenance+ci/package-lock.json
 
-      # Install project dependencies with Yarn in immutable CI mode.
-      - name: Yarn install
-        run: |
-          corepack enable
-          yarn install --immutable --immutable-cache --check-cache
+      # Install project dependencies from the committed lockfile.
+      - name: Install dependencies
+        run: npm ci
 
       # Install Playwright browsers and required system dependencies.
       - name: Install Playwright browsers
-        run: yarn playwright install --with-deps
+        run: npx playwright install --with-deps
 
       # Run the Playwright suite in CI.
       - name: Run Playwright tests
-        run: yarn playwright test
+        run: npx playwright test
 
       # Always upload the HTML report for debugging and review.
       - name: Upload Playwright HTML report
@@ -52,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-html-report
-          path: playwright-report
+          path: ai.test.maintenance+ci/playwright-report
           if-no-files-found: warn
 
       # Always upload Playwright traces from failed or retained runs.
@@ -62,6 +65,6 @@ jobs:
         with:
           name: playwright-traces
           path: |
-            test-results/**/trace*.zip
-            test-results/**/trace.zip
+            ai.test.maintenance+ci/test-results/**/trace*.zip
+            ai.test.maintenance+ci/test-results/**/trace.zip
           if-no-files-found: warn
