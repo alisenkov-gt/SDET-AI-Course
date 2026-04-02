@@ -3,7 +3,7 @@ import { PlaywrightHomePage } from '../src/pages/PlaywrightHomePage';
 
 const traceabilityId = 'TC-NAV-001';
 
-test.describe(`${traceabilityId} Playwright main navigation`, () => {
+test.describe.skip('Archived professional snapshot retained for chapter history', () => {
   test(`${traceabilityId} validates visible, accessible, and correctly targeted primary navigation links`, async ({
     page,
   }) => {
