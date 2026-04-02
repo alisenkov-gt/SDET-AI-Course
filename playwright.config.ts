@@ -5,11 +5,12 @@ export default defineConfig({
   timeout: 30_000,
   retries: 1,
   use: {
-    baseURL: process.env.BASE_URL || 'https://playwright.dev',
+    baseURL: process.env.BASE_URL || 'https://www.saucedemo.com',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
     headless: true,
+    testIdAttribute: 'data-test',
   },
   reporter: [['list'], ['html', { open: 'never' }]],
   projects: [
@@ -19,4 +20,3 @@ export default defineConfig({
     },
   ],
 });
-

@@ -11,6 +11,18 @@ export class BasePage {
     return this.page.goto(path, { waitUntil: 'domcontentloaded' });
   }
 
+  getByTestId(id: string): Locator {
+    return this.page.getByTestId(id);
+  }
+
+  protected slugifyProduct(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  }
+
+  protected inventoryItemByName(name: string): Locator {
+    return this.page.getByTestId('inventory-item-name').filter({ hasText: name });
+  }
+
   async waitForUrl(partial: string): Promise<void> {
     await this.page.waitForURL((url) => url.toString().includes(partial));
   }
@@ -30,4 +42,3 @@ export class BasePage {
     return target.isVisible();
   }
 }
-
