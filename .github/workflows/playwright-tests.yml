@@ -2,9 +2,9 @@ name: Playwright Tests
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [master]
   push:
-    branches: [main, master]
+    branches: [master]
 
 permissions:
   contents: read
@@ -18,11 +18,8 @@ jobs:
     name: playwright-tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: github-pages
     permissions:
       contents: read
-      pages: write
-      id-token: write
     defaults:
       run:
         working-directory: ai.test.maintenance+ci
@@ -74,69 +71,6 @@ jobs:
             ai.test.maintenance+ci/test-results/**/trace.zip
           if-no-files-found: warn
 
-      - name: Fetch existing Pages history
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        run: |
-          git fetch origin gh-pages --depth=1 || exit 0
-          git --work-tree pages-history checkout FETCH_HEAD -- .
-
-      - name: Update Playwright history
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        env:
-          JOB_CONCLUSION: ${{ job.status }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          mkdir -p playwright-report
-          node <<'EOF'
-          const fs = require('fs');
-          const path = require('path');
-
-          const reportDir = path.join(process.cwd(), 'playwright-report');
-          const pagesHistoryFile = path.join(process.cwd(), 'pages-history', 'history.json');
-          const reportHistoryFile = path.join(reportDir, 'history.json');
-
-          let history = [];
-          if (fs.existsSync(pagesHistoryFile)) {
-            history = JSON.parse(fs.readFileSync(pagesHistoryFile, 'utf8'));
-          }
-
-          const summaryPath = path.join(process.cwd(), 'test-results', '.last-run.json');
-          let counts = null;
-          if (fs.existsSync(summaryPath)) {
-            try {
-              const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
-              counts = {
-                status: summary.status ?? null,
-                failedTests: summary.failedTests ?? null,
-              };
-            } catch {
-              counts = null;
-            }
-          }
-
-          history.push({
-            timestamp: new Date().toISOString(),
-            runUrl: process.env.RUN_URL,
-            commitSha: process.env.GITHUB_SHA,
-            ref: process.env.GITHUB_REF,
-            branch: process.env.GITHUB_REF_NAME,
-            conclusion: process.env.JOB_CONCLUSION,
-            counts,
-          });
-
-          fs.writeFileSync(reportHistoryFile, JSON.stringify(history.slice(-50), null, 2));
-          EOF
-
-      - name: Upload Pages artifact
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ai.test.maintenance+ci/playwright-report
-
-      - name: Deploy Playwright report to GitHub Pages
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        uses: actions/deploy-pages@v4
-
   security-scan:
     name: security-scan
     runs-on: ubuntu-latest
@@ -179,3 +113,88 @@ jobs:
             process.exit(1);
           }
           EOF
+
+  deploy-pages:
+    name: deploy-pages
+    runs-on: ubuntu-latest
+    needs: playwright-tests
+    if: always() && github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment: github-pages
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Playwright HTML report
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-html-report
+          path: playwright-report
+
+      - name: Prepare Pages history
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_CONCLUSION: ${{ needs.playwright-tests.result }}
+        run: |
+          rm -rf gh-pages-history
+          mkdir -p gh-pages-history
+
+          if git ls-remote --exit-code origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages --depth=1
+            git worktree add gh-pages-history origin/gh-pages
+          fi
+
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const reportDir = path.join(process.cwd(), 'playwright-report');
+          const oldHistoryPath = path.join(process.cwd(), 'gh-pages-history', 'history.json');
+          const newHistoryPath = path.join(reportDir, 'history.json');
+          const summaryPath = path.join(reportDir, 'data', 'test-results.json');
+
+          let history = [];
+          if (fs.existsSync(oldHistoryPath)) {
+            try {
+              history = JSON.parse(fs.readFileSync(oldHistoryPath, 'utf8'));
+            } catch {
+              history = [];
+            }
+          }
+
+          let counts = null;
+          if (fs.existsSync(summaryPath)) {
+            try {
+              const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+              counts = Array.isArray(summary?.suites)
+                ? { suites: summary.suites.length }
+                : null;
+            } catch {
+              counts = null;
+            }
+          }
+
+          history.push({
+            timestamp: new Date().toISOString(),
+            runUrl: process.env.RUN_URL,
+            commitSha: process.env.GITHUB_SHA,
+            ref: process.env.GITHUB_REF,
+            branch: process.env.GITHUB_REF_NAME,
+            conclusion: process.env.JOB_CONCLUSION,
+            counts,
+          });
+
+          fs.writeFileSync(newHistoryPath, JSON.stringify(history.slice(-50), null, 2));
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report
+
+      - name: Deploy Playwright report to GitHub Pages
+        uses: actions/deploy-pages@v4
