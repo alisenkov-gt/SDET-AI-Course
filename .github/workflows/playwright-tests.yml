@@ -74,37 +74,43 @@ jobs:
             ai.test.maintenance+ci/test-results/**/trace.zip
           if-no-files-found: warn
 
-      - name: Fetch existing Pages history
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        run: |
-          git fetch origin gh-pages --depth=1 || exit 0
-          git --work-tree pages-history checkout FETCH_HEAD -- .
-
-      - name: Update Playwright history
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      - name: Prepare Pages history
+        if: always() && github.ref == 'refs/heads/main'
         env:
-          JOB_CONCLUSION: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_CONCLUSION: ${{ job.status }}
         run: |
           mkdir -p playwright-report
+          rm -rf ../gh-pages-history
+          mkdir -p ../gh-pages-history
+
+          if git ls-remote --exit-code origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages --depth=1
+            git worktree add ../gh-pages-history origin/gh-pages
+          fi
+
           node <<'EOF'
           const fs = require('fs');
           const path = require('path');
 
           const reportDir = path.join(process.cwd(), 'playwright-report');
-          const pagesHistoryFile = path.join(process.cwd(), 'pages-history', 'history.json');
-          const reportHistoryFile = path.join(reportDir, 'history.json');
+          const oldHistoryPath = path.join(process.cwd(), '..', 'gh-pages-history', 'history.json');
+          const newHistoryPath = path.join(reportDir, 'history.json');
+          const lastRunPath = path.join(process.cwd(), 'test-results', '.last-run.json');
 
           let history = [];
-          if (fs.existsSync(pagesHistoryFile)) {
-            history = JSON.parse(fs.readFileSync(pagesHistoryFile, 'utf8'));
+          if (fs.existsSync(oldHistoryPath)) {
+            try {
+              history = JSON.parse(fs.readFileSync(oldHistoryPath, 'utf8'));
+            } catch {
+              history = [];
+            }
           }
 
-          const summaryPath = path.join(process.cwd(), 'test-results', '.last-run.json');
           let counts = null;
-          if (fs.existsSync(summaryPath)) {
+          if (fs.existsSync(lastRunPath)) {
             try {
-              const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+              const summary = JSON.parse(fs.readFileSync(lastRunPath, 'utf8'));
               counts = {
                 status: summary.status ?? null,
                 failedTests: summary.failedTests ?? null,
@@ -124,17 +130,17 @@ jobs:
             counts,
           });
 
-          fs.writeFileSync(reportHistoryFile, JSON.stringify(history.slice(-50), null, 2));
+          fs.writeFileSync(newHistoryPath, JSON.stringify(history.slice(-50), null, 2));
           EOF
 
       - name: Upload Pages artifact
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: always() && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ai.test.maintenance+ci/playwright-report
 
       - name: Deploy Playwright report to GitHub Pages
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: always() && github.ref == 'refs/heads/main'
         uses: actions/deploy-pages@v4
 
   security-scan:
